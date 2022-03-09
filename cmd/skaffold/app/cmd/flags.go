@@ -32,6 +32,7 @@ import (
 
 var (
 	fromBuildOutputFile flags.BuildOutputFileFlag
+	preBuiltImages      flags.Images
 )
 
 // Nillable is used to reset objects that implement pflag's `Value` and `SliceValue`.
@@ -180,7 +181,7 @@ var flagRegistry = []Flag{
 	},
 	{
 		Name:          "wait-for-connection",
-		Usage:         "Blocks execution until the /v2/events gRPC/HTTP endpoint is hit",
+		Usage:         "Blocks ending execution of skaffold until the /v2/events gRPC/HTTP endpoint is hit",
 		Value:         &opts.WaitForConnection,
 		DefValue:      false,
 		FlagAddMethod: "BoolVar",
@@ -192,6 +193,15 @@ var flagRegistry = []Flag{
 		Usage:         "Save Skaffold events to the provided file after skaffold has finished executing, requires --rpc-port or --rpc-http-port",
 		Hidden:        true,
 		Value:         &opts.EventLogFile,
+		DefValue:      "",
+		FlagAddMethod: "StringVar",
+		DefinedOn:     []string{"dev", "build", "run", "debug", "deploy", "render", "test", "apply"},
+	},
+	{
+		Name:          "last-log-file",
+		Usage:         "Save Skaffold output to the provided file after skaffold has finished executing, requires --rpc-port or --rpc-http-port (defaults to $HOME/.skaffold/repos)",
+		Hidden:        true,
+		Value:         &opts.LastLogFile,
 		DefValue:      "",
 		FlagAddMethod: "StringVar",
 		DefinedOn:     []string{"dev", "build", "run", "debug", "deploy", "render", "test", "apply"},
@@ -306,11 +316,10 @@ var flagRegistry = []Flag{
 		Name:          "status-check",
 		Usage:         "Wait for deployed resources to stabilize",
 		Value:         &opts.StatusCheck,
-		DefValue:      true,
+		DefValue:      nil,
 		FlagAddMethod: "Var",
 		DefinedOn:     []string{"dev", "debug", "deploy", "run", "apply"},
 		IsEnum:        true,
-		NoOptDefVal:   "true",
 	},
 	{
 		Name:          "iterative-status-check",
@@ -372,6 +381,14 @@ var flagRegistry = []Flag{
 		Value:         &opts.CustomTag,
 		DefValue:      "",
 		FlagAddMethod: "StringVar",
+		DefinedOn:     []string{"build", "debug", "dev", "run", "deploy"},
+	},
+	{
+		Name:          "platform",
+		Usage:         "The platform to target for the build artifacts",
+		Value:         &opts.Platforms,
+		DefValue:      []string{},
+		FlagAddMethod: "StringSliceVar",
 		DefinedOn:     []string{"build", "debug", "dev", "run", "deploy"},
 	},
 	{
@@ -529,8 +546,19 @@ var flagRegistry = []Flag{
 		Value:         &fromBuildOutputFile,
 		DefValue:      "",
 		FlagAddMethod: "Var",
-		DefinedOn:     []string{"test", "deploy"},
+		DefinedOn:     []string{"deploy", "render", "test"},
 	},
+
+	{
+		Name:          "images",
+		Shorthand:     "i",
+		Usage:         "A list of pre-built images to deploy, either tagged images or NAME=TAG pairs",
+		Value:         &preBuiltImages,
+		DefValue:      nil,
+		FlagAddMethod: "Var",
+		DefinedOn:     []string{"deploy", "render", "test"},
+	},
+
 	{
 		Name:          "auto-create-config",
 		Usage:         "If true, skaffold will try to create a config for the user's run if it doesn't find one",
@@ -577,6 +605,14 @@ var flagRegistry = []Flag{
 		DefValue:      false,
 		FlagAddMethod: "BoolVar",
 		DefinedOn:     []string{"deploy"},
+	},
+	{
+		Name:          "resource-selector-rules-file",
+		Usage:         "Path to JSON file specifying the deny list of yaml objects for skaffold to NOT transform with 'image' and 'label' field replacements.  NOTE: this list is additive to skaffold's default denylist and denylist has priority over allowlist",
+		Value:         &opts.TransformRulesFile,
+		DefValue:      "",
+		FlagAddMethod: "StringVar",
+		DefinedOn:     []string{"dev", "render", "run", "debug", "deploy"},
 	},
 }
 

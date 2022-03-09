@@ -33,67 +33,78 @@ type WaitForDeletions struct {
 // SkaffoldOptions are options that are set by command line arguments not included
 // in the config file itself
 type SkaffoldOptions struct {
+	CacheFile         string
 	ConfigurationFile string
 	Command           string
-	GlobalConfig      string
-	EventLogFile      string
-	RenderOutput      string
-	User              string
 	CustomTag         string
-	Namespace         string
-	CacheFile         string
-	Trigger           string
-	KubeContext       string
-	KubeConfig        string
 	DigestSource      string
+	EventLogFile      string
+	GlobalConfig      string
+	KubeConfig        string
+	KubeContext       string
+	LastLogFile       string
 	// TODO(https://github.com/GoogleContainerTools/skaffold/issues/3668):
 	// remove minikubeProfile from here and instead detect it by matching the
 	// kubecontext API Server to minikube profiles
-	MinikubeProfile       string
-	RepoCacheDir          string
+	MinikubeProfile    string
+	Namespace          string
+	RenderOutput       string
+	RepoCacheDir       string
+	Trigger            string
+	User               string
+	TransformRulesFile string
+
+	ConfigurationFilter []string
+	CustomLabels        []string
+	HydratedManifests   []string
+	InsecureRegistries  []string
+	Profiles            []string
+	TargetImages        []string
+
 	Apply                 bool
+	AutoBuild             bool
+	AutoCreateConfig      bool
+	AutoDeploy            bool
+	AutoSync              bool
+	AssumeYes             bool
+	CacheArtifacts        bool
 	ContainerDebugging    bool
 	Cleanup               bool
-	Notification          bool
-	Tail                  bool
-	SkipTests             bool
-	CacheArtifacts        bool
+	DetectMinikube        bool
+	DryRun                bool
 	EnableRPC             bool
 	Force                 bool
+	ForceLoadImages       bool
+	IterativeStatusCheck  bool
+	Notification          bool
 	NoPrune               bool
 	NoPruneChildren       bool
-	AutoBuild             bool
-	AutoSync              bool
-	AutoDeploy            bool
-	RenderOnly            bool
-	AutoCreateConfig      bool
-	AssumeYes             bool
 	ProfileAutoActivation bool
-	DryRun                bool
+	PropagateProfiles     bool
+	RenderOnly            bool
+	SkipTests             bool
 	SkipRender            bool
 	SkipConfigDefaults    bool
-	PropagateProfiles     bool
-	DetectMinikube        bool
-	IterativeStatusCheck  bool
-	ForceLoadImages       bool
+	Tail                  bool
 	WaitForConnection     bool
-	MakePathsAbsolute     *bool
-	StatusCheck           BoolOrUndefined
-	PortForward           PortForwardOptions
-	DefaultRepo           StringOrUndefined
-	PushImages            BoolOrUndefined
-	CustomLabels          []string
-	TargetImages          []string
-	Profiles              []string
-	InsecureRegistries    []string
-	ConfigurationFilter   []string
-	HydratedManifests     []string
-	Muted                 Muted
-	BuildConcurrency      int
-	WatchPollInterval     int
-	RPCPort               IntOrUndefined
-	RPCHTTPPort           IntOrUndefined
+	// Add Skaffold-specific labels including runID, deployer labels, etc.
+	// `CustomLabels` are still applied if this is false. Must only be used in
+	// commands which don't deploy (e.g. `skaffold render`) since the runID
+	// label isn't available.
+	AddSkaffoldLabels bool
+	MakePathsAbsolute *bool
+	StatusCheck       BoolOrUndefined
+	PortForward       PortForwardOptions
+	DefaultRepo       StringOrUndefined
+	PushImages        BoolOrUndefined
+	Platforms         []string
+	Muted             Muted
+	BuildConcurrency  int
+	WatchPollInterval int
+	RPCPort           IntOrUndefined
+	RPCHTTPPort       IntOrUndefined
 
+	MultiLevelRepo   *bool
 	SyncRemoteCache  SyncRemoteCacheOption
 	WaitForDeletions WaitForDeletions
 }

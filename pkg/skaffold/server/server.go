@@ -129,6 +129,11 @@ func Initialize(opts config.SkaffoldOptions) (func() error, error) {
 		httpCallback, err = newHTTPServer(*opts.RPCHTTPPort.Value(), grpcPort)
 	}
 	callback := func() error {
+		// Optionally pause execution until endpoint hit
+		if opts.WaitForConnection {
+			eventV2.WaitForConnection()
+		}
+
 		httpErr := httpCallback()
 		grpcErr := grpcCallback()
 		errStr := ""
@@ -150,6 +155,10 @@ func Initialize(opts config.SkaffoldOptions) (func() error, error) {
 				errStr += fmt.Sprintf("eventV2 log file error: %s\n", logFileV2Err.Error())
 			}
 		}
+
+		// Save logs from current run to file
+		eventV2.SaveLastLog(opts.LastLogFile)
+
 		return errors.New(errStr)
 	}
 	if err != nil {
@@ -158,11 +167,6 @@ func Initialize(opts config.SkaffoldOptions) (func() error, error) {
 
 	if opts.EnableRPC && opts.RPCPort.Value() == nil && opts.RPCHTTPPort.Value() == nil {
 		log.Entry(context.TODO()).Warnf("started skaffold gRPC API on random port %d", grpcPort)
-	}
-
-	// Optionally pause execution until endpoint hit
-	if opts.WaitForConnection {
-		eventV2.WaitForConnection()
 	}
 
 	return callback, nil

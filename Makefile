@@ -22,6 +22,10 @@ REPOPATH ?= $(ORG)/$(PROJECT)
 RELEASE_BUCKET ?= $(PROJECT)
 GSC_BUILD_PATH ?= gs://$(RELEASE_BUCKET)/builds/$(COMMIT)
 GSC_BUILD_LATEST ?= gs://$(RELEASE_BUCKET)/builds/latest
+GSC_LTS_BUILD_PATH ?= gs://$(RELEASE_BUCKET)/lts/builds/$(COMMIT)
+GSC_LTS_BUILD_LATEST ?= gs://$(RELEASE_BUCKET)/lts/builds/latest
+GSC_LTS_RELEASE_PATH ?= gs://$(RELEASE_BUCKET)/lts/releases/$(VERSION)
+GSC_LTS_RELEASE_LATEST ?= gs://$(RELEASE_BUCKET)/lts/releases/latest
 GSC_RELEASE_PATH ?= gs://$(RELEASE_BUCKET)/releases/$(VERSION)
 GSC_RELEASE_LATEST ?= gs://$(RELEASE_BUCKET)/releases/latest
 
@@ -60,11 +64,6 @@ LDFLAGS_linux = -static
 
 GO_BUILD_TAGS_windows = release
 
-# darwin/arm64 requires Go 1.16beta1 or later; dockercore/golang-cross
-# doesn't have a recent macOS toolchain so disable CGO and use
-# github.com/rjeczalik/notify's kqueue support. 
-GO_VERSION_darwin_arm64 = 1.16beta1
-CGO_ENABLED_darwin_arm64 = 0
 GO_BUILD_TAGS_darwin = release
 
 ifneq "$(strip $(LOCAL))" "true"
@@ -84,6 +83,7 @@ endif
 .PHONY: install
 install: $(BUILD_DIR)/$(PROJECT)
 	mkdir -p $(GOPATH)/bin
+	rm -f $(GOBIN)/$(PROJECT)
 	cp $(BUILD_DIR)/$(PROJECT) $(GOBIN)/$(PROJECT)
 
 .PRECIOUS: $(foreach platform, $(SUPPORTED_PLATFORMS), $(BUILD_DIR)/$(PROJECT)-$(platform))
@@ -91,26 +91,12 @@ install: $(BUILD_DIR)/$(PROJECT)
 .PHONY: cross
 cross: $(foreach platform, $(SUPPORTED_PLATFORMS), $(BUILD_DIR)/$(PROJECT)-$(platform))
 
-$(BUILD_DIR)/$(PROJECT)-%: $(STATIK_FILES) $(GO_FILES) $(BUILD_DIR) deploy/cross/Dockerfile
+$(BUILD_DIR)/$(PROJECT)-%: $(STATIK_FILES) $(GO_FILES) $(BUILD_DIR)
 	$(eval os = $(firstword $(subst -, ,$*)))
 	$(eval arch = $(lastword $(subst -, ,$(subst .exe,,$*))))
 	$(eval ldflags = $(GO_LDFLAGS) $(patsubst %,-extldflags \"%\",$(LDFLAGS_$(os))))
 	$(eval tags = $(GO_BUILD_TAGS_$(os)) $(GO_BUILD_TAGS_$(os)_$(arch)))
-	$(eval cgoenabled = $(CGO_ENABLED_$(os)_$(arch)))
-	$(eval goversion = $(GO_VERSION_$(os)_$(arch)))
-
-	docker build \
-		--build-arg GOOS="$(os)" \
-		--build-arg GOARCH="$(arch)" \
-		--build-arg TAGS="$(tags)" \
-		--build-arg LDFLAGS="$(ldflags)" \
-		$(patsubst %,--build-arg CGO_ENABLED="%",$(cgoenabled)) \
-		$(patsubst %,--build-arg GO_VERSION="%",$(goversion)) \
-		-f deploy/cross/Dockerfile \
-		-t skaffold/cross \
-		.
-
-	docker run --rm skaffold/cross cat /build/skaffold > $@
+	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=1 go build -tags "$(tags)" -ldflags "$(ldflags)" -o $@ ./cmd/skaffold
 	(cd `dirname $@`; shasum -a 256 `basename $@`) | tee $@.sha256
 	file $@ || true
 
@@ -152,13 +138,13 @@ ifeq ($(GCP_ONLY),true)
 		--zone $(GKE_ZONE) \
 		--project $(GCP_PROJECT)
 endif
-	@ GCP_ONLY=$(GCP_ONLY) ./hack/gotest.sh -v $(REPOPATH)/integration/binpack $(REPOPATH)/integration -timeout 30m $(INTEGRATION_TEST_ARGS)
+	@ GCP_ONLY=$(GCP_ONLY) ./hack/gotest.sh -v $(REPOPATH)/integration/binpack $(REPOPATH)/integration -timeout 50m $(INTEGRATION_TEST_ARGS)
 
 .PHONY: integration
 integration: install integration-tests
 
 .PHONY: release
-release: cross $(BUILD_DIR)/VERSION
+release: $(BUILD_DIR)/VERSION
 	docker build \
 		--build-arg VERSION=$(VERSION) \
 		-f deploy/skaffold/Dockerfile \
@@ -166,20 +152,34 @@ release: cross $(BUILD_DIR)/VERSION
 		-t gcr.io/$(GCP_PROJECT)/skaffold:latest \
 		-t gcr.io/$(GCP_PROJECT)/skaffold:$(VERSION) \
 		.
-	gsutil -m cp $(BUILD_DIR)/$(PROJECT)-* $(GSC_RELEASE_PATH)/
-	gsutil -m cp $(BUILD_DIR)/VERSION $(GSC_RELEASE_PATH)/VERSION
-	gsutil -m cp -r $(GSC_RELEASE_PATH)/* $(GSC_RELEASE_LATEST)
 
 .PHONY: release-build
-release-build: cross
+release-build:
 	docker build \
 		-f deploy/skaffold/Dockerfile \
 		--target release \
 		-t gcr.io/$(GCP_PROJECT)/skaffold:edge \
 		-t gcr.io/$(GCP_PROJECT)/skaffold:$(COMMIT) \
 		.
-	gsutil -m cp $(BUILD_DIR)/$(PROJECT)-* $(GSC_BUILD_PATH)/
-	gsutil -m cp -r $(GSC_BUILD_PATH)/* $(GSC_BUILD_LATEST)
+
+.PHONY: release-lts
+release-lts: $(BUILD_DIR)/VERSION
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		-f deploy/skaffold/Dockerfile.lts \
+		--target release \
+		-t gcr.io/$(GCP_PROJECT)/skaffold:lts \
+		-t gcr.io/$(GCP_PROJECT)/skaffold:$(VERSION)-lts \
+		.
+
+.PHONY: release-lts-build
+release-lts-build:
+	docker build \
+		-f deploy/skaffold/Dockerfile.lts \
+		--target release \
+		-t gcr.io/$(GCP_PROJECT)/skaffold:edge-lts \
+		-t gcr.io/$(GCP_PROJECT)/skaffold:$(COMMIT)-lts \
+		.
 
 .PHONY: clean
 clean:
@@ -193,7 +193,6 @@ build_deps:
 		-t gcr.io/$(GCP_PROJECT)/build_deps:$(DEPS_DIGEST) \
 		deploy/skaffold
 	docker push gcr.io/$(GCP_PROJECT)/build_deps:$(DEPS_DIGEST)
-	@./hack/check-skaffold-builder.sh
 
 .PHONY: skaffold-builder
 skaffold-builder:

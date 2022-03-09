@@ -20,19 +20,49 @@ import (
 	"context"
 	"io"
 
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/docker"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
 )
 
 var realWorkDir = util.RealWorkDir
 
-func Lint(ctx context.Context, out io.Writer, opts Options) error {
-	skaffoldYamlRuleList, err := GetSkaffoldYamlsLintResults(ctx, opts)
+func GetAllLintResults(ctx context.Context, opts Options, dockerCfg docker.Config) ([]Result, error) {
+	results := []Result{}
+	skaffoldYamlResults, err := GetSkaffoldYamlsLintResults(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results, *skaffoldYamlResults...)
+
+	if dockerCfg != nil {
+		dockerfileCommandResults, err := GetDockerfilesLintResults(ctx, opts, dockerCfg)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *dockerfileCommandResults...)
+	}
+
+	k8sManifestResults, err := GetK8sManifestsLintResults(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results, *k8sManifestResults...)
+	return results, nil
+}
+
+func Lint(ctx context.Context, out io.Writer, opts Options, dockerCfg docker.Config) error {
+	results, err := GetAllLintResults(ctx, opts, dockerCfg)
 	if err != nil {
 		return err
 	}
-	results := []Result{}
-	results = append(results, *skaffoldYamlRuleList...)
 	// output flattened list
+	if opts.OutFormat == JSONOutput {
+		// need to remove some fields that cannot be serialized in the Rules of the Results
+		for _, res := range results {
+			res.Rule.ExplanationPopulator = nil
+			res.Rule.LintConditions = nil
+		}
+	}
 	formatter := OutputFormatter(out, opts.OutFormat)
 	return formatter.Write(results)
 }

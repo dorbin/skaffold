@@ -38,6 +38,7 @@ import (
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/filemon"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/graph"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/log"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/platform"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/defaults"
@@ -131,16 +132,16 @@ func (t *TestBench) TrackBuildArtifacts(_ []graph.Artifact) {}
 func (t *TestBench) TestDependencies(context.Context, *latestV1.Artifact) ([]string, error) {
 	return nil, nil
 }
-func (t *TestBench) Dependencies() ([]string, error)                  { return nil, nil }
-func (t *TestBench) Cleanup(ctx context.Context, out io.Writer) error { return nil }
-func (t *TestBench) Prune(ctx context.Context, out io.Writer) error   { return nil }
+func (t *TestBench) Dependencies() ([]string, error)                               { return nil, nil }
+func (t *TestBench) Cleanup(ctx context.Context, out io.Writer, dryRun bool) error { return nil }
+func (t *TestBench) Prune(ctx context.Context, out io.Writer) error                { return nil }
 
 func (t *TestBench) enterNewCycle() {
 	t.actions = append(t.actions, t.currentActions)
 	t.currentActions = Actions{}
 }
 
-func (t *TestBench) Build(_ context.Context, _ io.Writer, _ tag.ImageTags, artifacts []*latestV1.Artifact) ([]graph.Artifact, error) {
+func (t *TestBench) Build(_ context.Context, _ io.Writer, _ tag.ImageTags, _ platform.Resolver, artifacts []*latestV1.Artifact) ([]graph.Artifact, error) {
 	if len(t.buildErrors) > 0 {
 		err := t.buildErrors[0]
 		t.buildErrors = t.buildErrors[1:]
@@ -436,8 +437,12 @@ func TestNewForConfig(t *testing.T) {
 					DeployType: latestV1.DeployType{
 						KubectlDeploy: &latestV1.KubectlDeploy{},
 					},
-					TransformableAllowList: []latestV1.ResourceFilter{
-						{Type: "example.com/Application"},
+				},
+				ResourceSelector: latestV1.ResourceSelectorConfig{
+					Allow: []latestV1.ResourceFilter{
+						{
+							GroupKind: "example.com/Application",
+						},
 					},
 				},
 			},
@@ -486,9 +491,9 @@ func TestNewForConfig(t *testing.T) {
 				},
 			}
 			// Test transformableAllowList
-			filters := runCtx.TransformableAllowList()
-			if test.pipeline.Deploy.TransformableAllowList != nil {
-				t.CheckDeepEqual(test.pipeline.Deploy.TransformableAllowList, filters)
+			filters := runCtx.TransformAllowList()
+			if test.pipeline.ResourceSelector.Allow != nil {
+				t.CheckDeepEqual(test.pipeline.ResourceSelector.Allow, filters)
 			} else {
 				t.CheckEmpty(filters)
 			}

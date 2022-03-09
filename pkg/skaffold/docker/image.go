@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -342,6 +343,7 @@ func (l *localDaemon) Build(ctx context.Context, out io.Writer, workspace string
 		NetworkMode: strings.ToLower(a.NetworkMode),
 		ExtraHosts:  a.AddHost,
 		NoCache:     a.NoCache,
+		PullParent:  a.PullParent,
 	})
 	if err != nil {
 		return "", fmt.Errorf("docker build: %w", err)
@@ -363,6 +365,10 @@ func (l *localDaemon) Build(ctx context.Context, out io.Writer, workspace string
 	}
 
 	if err := streamDockerMessages(out, resp.Body, auxCallback); err != nil {
+		var jm *jsonmessage.JSONError
+		if errors.As(err, &jm) {
+			return "", fmt.Errorf("docker build failure: %w", err)
+		}
 		return "", fmt.Errorf("unable to stream build output: %w", err)
 	}
 
@@ -534,6 +540,10 @@ func (l *localDaemon) TagWithImageID(ctx context.Context, ref string, imageID st
 		return "", err
 	}
 
+	if imageID == "" {
+		log.Entry(ctx).Debugf("generating tag for %s: empty image id\n", ref)
+		return "", nil
+	}
 	uniqueTag := parsed.BaseName + ":" + strings.TrimPrefix(imageID, "sha256:")
 	if err := l.Tag(ctx, imageID, uniqueTag); err != nil {
 		return "", err
@@ -635,6 +645,10 @@ func ToCLIBuildArgs(a *latestV1.DockerArtifact, evaluatedArgs map[string]*string
 
 	if a.Squash {
 		args = append(args, "--squash")
+	}
+
+	if a.PullParent {
+		args = append(args, "--pull")
 	}
 
 	for _, secret := range a.Secrets {

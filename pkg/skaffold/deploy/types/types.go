@@ -32,8 +32,11 @@ type Config interface {
 	GlobalConfig() string
 	ConfigurationFile() string
 	DefaultRepo() *string
+	MultiLevelRepo() *bool
 	SkipRender() bool
-	TransformableAllowList() []latestV1.ResourceFilter
+	TransformAllowList() []latestV1.ResourceFilter
+	TransformDenyList() []latestV1.ResourceFilter
+	TransformRulesFile() string
 }
 
 // Artifact contains all information about a completed deployment

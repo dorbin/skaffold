@@ -27,11 +27,13 @@ import (
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/custom"
 	dockerbuilder "github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/docker"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/jib"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/ko"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/misc"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/docker"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/graph"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/platform"
 	latestV1 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest/v1"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
 )
@@ -138,7 +140,8 @@ func (b *Builder) Prune(ctx context.Context, _ io.Writer) error {
 
 // artifactBuilder represents a per artifact builder interface
 type artifactBuilder interface {
-	Build(ctx context.Context, out io.Writer, a *latestV1.Artifact, tag string) (string, error)
+	Build(ctx context.Context, out io.Writer, a *latestV1.Artifact, tag string, platforms platform.Matcher) (string, error)
+	SupportedPlatforms() platform.Matcher
 }
 
 // newPerArtifactBuilder returns an instance of `artifactBuilder`
@@ -160,6 +163,9 @@ func newPerArtifactBuilder(b *Builder, a *latestV1.Artifact) (artifactBuilder, e
 
 	case a.BuildpackArtifact != nil:
 		return buildpacks.NewArtifactBuilder(b.localDocker, b.pushImages, b.mode, b.artifactStore), nil
+
+	case a.KoArtifact != nil:
+		return ko.NewArtifactBuilder(b.localDocker, b.pushImages, b.mode, b.insecureRegistries), nil
 
 	default:
 		return nil, fmt.Errorf("unexpected type %q for local artifact:\n%s", misc.ArtifactType(a), misc.FormatArtifact(a))

@@ -261,7 +261,19 @@ func TestKubectlCleanup(t *testing.T) {
 		kubectl     latestV1.KubectlDeploy
 		commands    util.Command
 		shouldErr   bool
+		dryRun      bool
 	}{
+		{
+			description: "cleanup dry-run",
+			kubectl: latestV1.KubectlDeploy{
+				Manifests: []string{"deployment.yaml"},
+			},
+			commands: testutil.
+				CmdRunOut("kubectl version --client -ojson", KubectlVersion112).
+				AndRunOut("kubectl --context kubecontext --namespace testNamespace create --dry-run -oyaml -f deployment.yaml", DeploymentWebYAML).
+				AndRun("kubectl --context kubecontext --namespace testNamespace delete --dry-run --ignore-not-found=true --wait=false -f -"),
+			dryRun: true,
+		},
 		{
 			description: "cleanup success",
 			kubectl: latestV1.KubectlDeploy{
@@ -322,7 +334,7 @@ func TestKubectlCleanup(t *testing.T) {
 			}, &label.DefaultLabeller{}, &test.kubectl)
 			t.RequireNoError(err)
 
-			err = k.Cleanup(context.Background(), ioutil.Discard)
+			err = k.Cleanup(context.Background(), ioutil.Discard, test.dryRun)
 
 			t.CheckError(test.shouldErr, err)
 		})
@@ -369,7 +381,7 @@ func TestKubectlDeployerRemoteCleanup(t *testing.T) {
 			}, &label.DefaultLabeller{}, &test.kubectl)
 			t.RequireNoError(err)
 
-			err = k.Cleanup(context.Background(), ioutil.Discard)
+			err = k.Cleanup(context.Background(), ioutil.Discard, false)
 
 			t.CheckNoError(err)
 		})
@@ -679,8 +691,9 @@ spec:
 				CmdRunOut("kubectl version --client -ojson", KubectlVersion112).
 				AndRunOut("kubectl --context kubecontext create --dry-run -oyaml -f "+tmpDir.Path("deployment.yaml"), test.input))
 			deployer, err := NewDeployer(&kubectlConfig{
-				workingDir:  ".",
-				defaultRepo: "gcr.io/project",
+				workingDir:     ".",
+				defaultRepo:    "gcr.io/project",
+				multiLevelRepo: util.BoolPtr(true),
 			}, &label.DefaultLabeller{}, &latestV1.KubectlDeploy{
 				Manifests: []string{tmpDir.Path("deployment.yaml")},
 			})
@@ -776,6 +789,7 @@ type kubectlConfig struct {
 	runcontext.RunContext // Embedded to provide the default values.
 	workingDir            string
 	defaultRepo           string
+	multiLevelRepo        *bool
 	skipRender            bool
 	force                 bool
 	waitForDeletions      config.WaitForDeletions
@@ -787,5 +801,6 @@ func (c *kubectlConfig) WorkingDir() string                                    {
 func (c *kubectlConfig) SkipRender() bool                                      { return c.skipRender }
 func (c *kubectlConfig) ForceDeploy() bool                                     { return c.force }
 func (c *kubectlConfig) DefaultRepo() *string                                  { return &c.defaultRepo }
+func (c *kubectlConfig) MultiLevelRepo() *bool                                 { return c.multiLevelRepo }
 func (c *kubectlConfig) WaitForDeletions() config.WaitForDeletions             { return c.waitForDeletions }
 func (c *kubectlConfig) PortForwardResources() []*latestV1.PortForwardResource { return nil }

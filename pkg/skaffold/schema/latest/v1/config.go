@@ -26,7 +26,7 @@ import (
 )
 
 // This config version is not yet released, it is SAFE TO MODIFY the structs in this file.
-const Version string = "skaffold/v2beta25"
+const Version string = "skaffold/v2beta28"
 
 // NewSkaffoldConfig creates a SkaffoldConfig
 func NewSkaffoldConfig() util.VersionedConfig {
@@ -73,6 +73,9 @@ type Pipeline struct {
 
 	// PortForward describes user defined resources to port-forward.
 	PortForward []*PortForwardResource `yaml:"portForward,omitempty"`
+
+	// ResourceSelector describes user defined filters describing how skaffold should treat objects/fields during rendering.
+	ResourceSelector ResourceSelectorConfig `yaml:"resourceSelector,omitempty"`
 }
 
 // GitInfo contains information on the origin of skaffold configurations cloned from a git repository.
@@ -145,6 +148,14 @@ type PortForwardResource struct {
 	LocalPort int `yaml:"localPort,omitempty"`
 }
 
+// ResourceSelectorConfig contains all the configuration needed by the deploy steps.
+type ResourceSelectorConfig struct {
+	// Allow configures an allowlist for transforming manifests.
+	Allow []ResourceFilter `yaml:"allow,omitempty"`
+	// Deny configures an allowlist for transforming manifests.
+	Deny []ResourceFilter `yaml:"deny,omitempty"`
+}
+
 // BuildConfig contains all the configuration for the build steps.
 type BuildConfig struct {
 	// Artifacts lists the images you're going to be building.
@@ -158,6 +169,13 @@ type BuildConfig struct {
 	// A few strategies are provided here, although you most likely won't need to care!
 	// If not specified, it defaults to `gitCommit: {variant: Tags}`.
 	TagPolicy TagPolicy `yaml:"tagPolicy,omitempty"`
+
+	// Platforms is the list of platforms to build all artifact images for.
+	// It can be overridden by the individual artifact's `platforms` property.
+	// If the target builder cannot build for atleast one of the specified platforms, then the build fails.
+	// Each platform is of the format `os[/arch[/variant]]`, e.g., `linux/amd64`.
+	// Example: `["linux/amd64", "linux/arm64"]`.
+	Platforms []string `yaml:"platforms,omitempty"`
 
 	BuildType `yaml:",inline"`
 }
@@ -372,6 +390,8 @@ type KanikoCache struct {
 	HostPath string `yaml:"hostPath,omitempty"`
 	// TTL Cache timeout in hours.
 	TTL string `yaml:"ttl,omitempty"`
+	// CacheCopyLayers enables caching of copy layers.
+	CacheCopyLayers bool `yaml:"cacheCopyLayers,omitempty"`
 }
 
 // ClusterDetails *beta* describes how to do an on-cluster build.
@@ -517,9 +537,6 @@ type DeployConfig struct {
 
 	// Logs configures how container logs are printed as a result of a deployment.
 	Logs LogsConfig `yaml:"logs,omitempty"`
-
-	// TransformableAllowList configures an allowlist for transforming manifests.
-	TransformableAllowList []ResourceFilter `yaml:"-"`
 }
 
 // DeployType contains the specific implementation and parameters needed
@@ -848,6 +865,15 @@ type LogsConfig struct {
 	// `none`: don't add a prefix.
 	// Defaults to `auto`.
 	Prefix string `yaml:"prefix,omitempty"`
+
+	// JSONParse defines the rules for parsing/outputting json logs.
+	JSONParse JSONParseConfig `yaml:"jsonParse,omitempty"`
+}
+
+// JSONParseConfig defines the rules for parsing/outputting json logs.
+type JSONParseConfig struct {
+	// Fields specifies which top level fields should be printed.
+	Fields []string `yaml:"fields,omitempty"`
 }
 
 // Artifact are the items that need to be built, along with the context in which
@@ -875,6 +901,13 @@ type Artifact struct {
 
 	// LifecycleHooks describes a set of lifecycle hooks that are executed before and after each build of the target artifact.
 	LifecycleHooks BuildHooks `yaml:"hooks,omitempty"`
+
+	// Platforms is the list of platforms to build this artifact image for.
+	// It overrides the values inferred through heuristics or provided in the top level `platforms` property or in the global config.
+	// If the target builder cannot build for atleast one of the specified platforms, then the build fails.
+	// Each platform is of the format `os[/arch[/variant]]`, e.g., `linux/amd64`.
+	// Example: `["linux/amd64", "linux/arm64"]`.
+	Platforms []string `yaml:"platforms,omitempty"`
 }
 
 // Sync *beta* specifies what files to sync into the container.
@@ -983,9 +1016,8 @@ type ArtifactType struct {
 	// contain [Bazel](https://bazel.build/) configuration files.
 	BazelArtifact *BazelArtifact `yaml:"bazel,omitempty" yamltags:"oneOf=artifact"`
 
-	// TODO(halvards)[09/29/2021]: Use `ko` as the yaml tag in place of `-` when we are ready to expose the ko builder in the docs.
 	// KoArtifact builds images using [ko](https://github.com/google/ko).
-	KoArtifact *KoArtifact `yaml:"-,omitempty" yamltags:"oneOf=artifact"`
+	KoArtifact *KoArtifact `yaml:"ko,omitempty" yamltags:"oneOf=artifact"`
 
 	// JibArtifact builds images using the
 	// [Jib plugins for Maven or Gradle](https://github.com/GoogleContainerTools/jib/).
@@ -1300,7 +1332,10 @@ type DockerArtifact struct {
 	// These flags are only used during a build through the Docker CLI.
 	CliFlags []string `yaml:"cliFlags,omitempty"`
 
-	// NoCache used to pass in --no-cache to docker build to prevent caching.
+	// PullParent is used to attempt pulling the parent image even if an older image exists locally.
+	PullParent bool `yaml:"pullParent,omitempty"`
+
+	// NoCache set to true to pass in --no-cache to docker build, which will prevent caching.
 	NoCache bool `yaml:"noCache,omitempty"`
 
 	// Squash is used to pass in --squash to docker build to squash docker image layers into single layer.
@@ -1354,15 +1389,15 @@ type KoArtifact struct {
 	// Env are environment variables, in the `key=value` form, passed to the build.
 	// These environment variables are only used at build time.
 	// They are _not_ set in the resulting container image.
-	// For example: `["GOPRIVATE=source.developers.google.com", "GOCACHE=/workspace/.gocache"]`.
+	// For example: `["GOPRIVATE=git.example.com", "GOCACHE=/workspace/.gocache"]`.
 	Env []string `yaml:"env,omitempty"`
 
-	// Flags are additional build flags passed to the builder.
+	// Flags are additional build flags passed to `go build`.
 	// For example: `["-trimpath", "-v"]`.
-	Flags []string `yaml:"args,omitempty"`
+	Flags []string `yaml:"flags,omitempty"`
 
 	// Labels are key-value string pairs to add to the image config.
-	// For example: `{"org.opencontainers.image.source":"https://github.com/GoogleContainerTools/skaffold"}`.
+	// For example: `{"foo":"bar"}`.
 	Labels map[string]string `yaml:"labels,omitempty"`
 
 	// Ldflags are linker flags passed to the builder.
@@ -1376,19 +1411,12 @@ type KoArtifact struct {
 	// Main is ignored if the `ImageName` starts with `ko://`.
 	// Example: `./cmd/foo`.
 	Main string `yaml:"main,omitempty"`
-
-	// Platforms is the list of platforms to build images for.
-	// Each platform is of the format `os[/arch[/variant]]`, e.g., `linux/amd64`.
-	// Use `["all"]` to build for all platforms supported by the base image.
-	// If empty, the builder uses the ko default (`["linux/amd64"]`).
-	// Example: `["linux/amd64", "linux/arm64"]`.
-	Platforms []string `yaml:"platforms,omitempty"`
 }
 
 // KoDependencies is used to specify dependencies for an artifact built by ko.
 type KoDependencies struct {
 	// Paths should be set to the file dependencies for this artifact, so that the Skaffold file watcher knows when to rebuild and perform file synchronization.
-	// Defaults to `["."]`.
+	// Defaults to `["**/*.go"]`.
 	Paths []string `yaml:"paths,omitempty" yamltags:"oneOf=dependency"`
 
 	// Ignore specifies the paths that should be ignored by Skaffold's file watcher.
@@ -1461,6 +1489,9 @@ type HostHook struct {
 	Command []string `yaml:"command" yamltags:"required"`
 	// OS is an optional slice of operating system names. If the host machine OS is different, then it skips execution.
 	OS []string `yaml:"os,omitempty"`
+	// Dir specifies the working directory of the command.
+	// If empty, the command runs in the calling process's current directory.
+	Dir string `yaml:"dir,omitempty" skaffold:"filepath"`
 }
 
 // ContainerHook describes a lifecycle hook definition to execute on a container. The container name is inferred from the scope in which this hook is defined.
@@ -1481,8 +1512,8 @@ type NamedContainerHook struct {
 
 // ResourceFilter contains definition to filter which resource to transform.
 type ResourceFilter struct {
-	// Type is the compact format of a resource type.
-	Type string `yaml:"type" yamltags:"required"`
+	// GroupKind is the compact format of a resource type.
+	GroupKind string `yaml:"groupKind" yamltags:"required"`
 	// Image is an optional slice of JSON-path-like paths of where to rewrite images.
 	Image []string `yaml:"image,omitempty"`
 	// Labels is an optional slide of JSON-path-like paths of where to add a labels block if missing.

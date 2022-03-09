@@ -28,7 +28,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/apiversion"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
 	sErrors "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/errors"
 	latestV1 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest/v1"
@@ -78,6 +77,9 @@ import (
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta22"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta23"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta24"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta25"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta26"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta27"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta3"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta4"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v2beta5"
@@ -153,6 +155,9 @@ var SchemaVersionsV1 = Versions{
 	{v2beta22.Version, v2beta22.NewSkaffoldConfig},
 	{v2beta23.Version, v2beta23.NewSkaffoldConfig},
 	{v2beta24.Version, v2beta24.NewSkaffoldConfig},
+	{v2beta25.Version, v2beta25.NewSkaffoldConfig},
+	{v2beta26.Version, v2beta26.NewSkaffoldConfig},
+	{v2beta27.Version, v2beta27.NewSkaffoldConfig},
 	{latestV1.Version, latestV1.NewSkaffoldConfig},
 }
 
@@ -183,10 +188,6 @@ func (v *Versions) Find(apiVersion string) (func() util.VersionedConfig, bool) {
 
 // IsSkaffoldConfig is for determining if a file is skaffold config file.
 func IsSkaffoldConfig(file string) bool {
-	if !kubernetes.HasKubernetesFileExtension(file) {
-		return false
-	}
-
 	if config, err := ParseConfig(file); err == nil && config != nil {
 		return true
 	}

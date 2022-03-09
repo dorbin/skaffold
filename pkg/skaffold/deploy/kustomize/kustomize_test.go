@@ -122,6 +122,26 @@ func TestKustomizeDeploy(t *testing.T) {
 			kustomizeCmdPresent: true,
 		},
 		{
+			description: "deploy success (kustomizePaths with env template)",
+			kustomize: latestV1.KustomizeDeploy{
+				KustomizePaths: []string{"/a/b/{{ .MYENV }}"},
+			},
+			commands: testutil.
+				CmdRunOut("kubectl version --client -ojson", kubectl.KubectlVersion118).
+				AndRunOut("kustomize build /a/b/c", kubectl.DeploymentWebYAML).
+				AndRunInputOut("kubectl --context kubecontext --namespace testNamespace get -f - --ignore-not-found -ojson", kubectl.DeploymentWebYAMLv1, "").
+				AndRun("kubectl --context kubecontext --namespace testNamespace apply -f - --force --grace-period=0"),
+			builds: []graph.Artifact{{
+				ImageName: "leeroy-web",
+				Tag:       "leeroy-web:v1",
+			}},
+			forceDeploy: true,
+			envs: map[string]string{
+				"MYENV": "c",
+			},
+			kustomizeCmdPresent: true,
+		},
+		{
 			description: "deploy success with multiple kustomizations",
 			kustomize: latestV1.KustomizeDeploy{
 				KustomizePaths: []string{"a", "b"},
@@ -211,7 +231,18 @@ func TestKustomizeCleanup(t *testing.T) {
 		kustomize   latestV1.KustomizeDeploy
 		commands    util.Command
 		shouldErr   bool
+		dryRun      bool
 	}{
+		{
+			description: "cleanup dry-run",
+			kustomize: latestV1.KustomizeDeploy{
+				KustomizePaths: []string{tmpDir.Root()},
+			},
+			commands: testutil.
+				CmdRunOut("kustomize build "+tmpDir.Root(), kubectl.DeploymentWebYAML).
+				AndRun("kubectl --context kubecontext --namespace testNamespace delete --dry-run --ignore-not-found=true --wait=false -f -"),
+			dryRun: true,
+		},
 		{
 			description: "cleanup success",
 			kustomize: latestV1.KustomizeDeploy{
@@ -262,7 +293,7 @@ func TestKustomizeCleanup(t *testing.T) {
 					Namespace: kubectl.TestNamespace}},
 			}, &label.DefaultLabeller{}, &test.kustomize)
 			t.RequireNoError(err)
-			err = k.Cleanup(context.Background(), ioutil.Discard)
+			err = k.Cleanup(context.Background(), ioutil.Discard, test.dryRun)
 
 			t.CheckError(test.shouldErr, err)
 		})

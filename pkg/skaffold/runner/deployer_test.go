@@ -40,7 +40,6 @@ import (
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/loader"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
 	latestV1 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest/v1"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/status"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/sync"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
 	"github.com/GoogleContainerTools/skaffold/testutil"
@@ -134,6 +133,59 @@ func TestGetDeployer(tOuter *testing.T) {
 					&kpt.Deployer{},
 				}, false),
 			},
+			{
+				description: "apply does not allow multiple deployers when a helm namespace is set",
+				apply:       true,
+				cfg: latestV1.DeployType{
+					HelmDeploy: &latestV1.HelmDeploy{
+						Releases: []latestV1.HelmRelease{
+							{
+								Namespace: "foo",
+							},
+						},
+					},
+					KubectlDeploy: &latestV1.KubectlDeploy{},
+				},
+				shouldErr: true,
+			},
+			{
+				description: "apply does not allow multiple helm releases with different namespaces set",
+				apply:       true,
+				cfg: latestV1.DeployType{
+					HelmDeploy: &latestV1.HelmDeploy{
+						Releases: []latestV1.HelmRelease{
+							{
+								Namespace: "foo",
+							},
+							{
+								Namespace: "bar",
+							},
+						},
+					},
+				},
+				shouldErr: true,
+			},
+			{
+				description: "apply does allow multiple helm releases with the same namespace set",
+				apply:       true,
+				cfg: latestV1.DeployType{
+					HelmDeploy: &latestV1.HelmDeploy{
+						Releases: []latestV1.HelmRelease{
+							{
+								Namespace: "foo",
+							},
+							{
+								Namespace: "foo",
+							},
+						},
+					},
+				},
+				expected: t.RequireNonNilResult(kubectl.NewDeployer(&runcontext.RunContext{
+					Pipelines: runcontext.NewPipelines([]latestV1.Pipeline{{}}),
+				}, &label.DefaultLabeller{}, &latestV1.KubectlDeploy{
+					Flags: latestV1.KubectlFlags{},
+				})).(deploy.Deployer),
+			},
 		}
 		for _, test := range tests {
 			testutil.Run(tOuter, test.description, func(t *testutil.T) {
@@ -179,8 +231,8 @@ func TestGetDefaultDeployer(tOuter *testing.T) {
 		t.Override(&component.NewDebugger, func(config.RunMode, kubernetes.PodSelector, *[]string, string) debug.Debugger {
 			return &debug.NoopDebugger{}
 		})
-		t.Override(&component.NewMonitor, func(k8sstatus.Config, string, *label.DefaultLabeller, *[]string) status.Monitor {
-			return &status.NoopMonitor{}
+		t.Override(&component.NewMonitor, func(k8sstatus.Config, string, *label.DefaultLabeller, *[]string) k8sstatus.Monitor {
+			return &k8sstatus.NoopMonitor{}
 		})
 		t.Override(&component.NewImageLoader, func(k8sloader.Config, *pkgkubectl.CLI) loader.ImageLoader {
 			return &loader.NoopImageLoader{}

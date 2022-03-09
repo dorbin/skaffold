@@ -3,6 +3,10 @@ name: Verify examples
 # Triggers the workflow on push or pull request events
 on: [pull_request]
 
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}-${{github.workflow}}
+  cancel-in-progress: true
+
 jobs:
   dependabot:
     name: Verify changes to examples
@@ -10,9 +14,15 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17.*
+      id: go
 
     # Skip changes not affecting examples or integration/examples
     - name: Computes number of changes to examples

@@ -42,18 +42,21 @@ func TestLintOutput(t *testing.T) {
 			results: []Result{
 				{
 					Rule: &Rule{
-						RuleID:      DummyRuleIDForTesting,
-						RuleType:    RegExpLintLintRule,
-						Explanation: "",
+						RuleID:              DummyRuleIDForTesting,
+						RuleType:            DockerfileCommandLintRule,
+						ExplanationTemplate: "",
 					},
+					Explanation: "test explanation",
 					AbsFilePath: "/abs/rel/path",
 					RelFilePath: "rel/path",
-					Line:        1,
-					Column:      0,
+					StartLine:   1,
+					EndLine:     2,
+					StartColumn: 1,
+					EndColumn:   1,
 				},
 			},
-			text:     "first column of this line should be flagged in the result [1,0]",
-			expected: "rel/path:1:0: ID000001: : (RegExpLintLintRule)\nfirst column of this line should be flagged in the result [1,0]\n^\n",
+			text:     "first column of this line should be flagged in the result [1,1]",
+			expected: "rel/path:1:1: ID000000: DockerfileCommandLintRule: test explanation\nfirst column of this line should be flagged in the result [1,1]\n^\n",
 		},
 		{
 			description: "verify json lint output is as expected",
@@ -61,19 +64,20 @@ func TestLintOutput(t *testing.T) {
 			results: []Result{
 				{
 					Rule: &Rule{
-						RuleID:      DummyRuleIDForTesting,
-						RuleType:    RegExpLintLintRule,
-						Explanation: "",
-						Severity:    protocol.DiagnosticSeverityError,
+						RuleID:              DummyRuleIDForTesting,
+						RuleType:            DockerfileCommandLintRule,
+						ExplanationTemplate: "",
+						Severity:            protocol.DiagnosticSeverityError,
 					},
 					AbsFilePath: "/abs/rel/path",
 					RelFilePath: "rel/path",
-					Line:        1,
-					Column:      0,
+					StartLine:   1,
+					StartColumn: 1,
+					Explanation: "test explanation",
 				},
 			},
-			text:     "first column of this line should be flagged in the result [1,0]",
-			expected: `[{"Rule":{"RuleID":0,"RuleType":0,"Explanation":"","Severity":1,"Filter":null,"LintConditions":null},"AbsFilePath":%#v,"RelFilePath":"rel/path","Line":1,"Column":0}]` + "\n",
+			text:     "first column of this line should be flagged in the result [1,1]",
+			expected: `[{"Rule":{"RuleID":0,"RuleType":1,"ExplanationTemplate":"","Severity":1,"Filter":null},"AbsFilePath":%#v,"RelFilePath":"rel/path","Explanation":"test explanation","StartLine":1,"EndLine":0,"StartColumn":1,"EndColumn":0}]` + "\n",
 		},
 	}
 	for _, test := range tests {
@@ -100,7 +104,10 @@ func TestLintOutput(t *testing.T) {
 
 			var b bytes.Buffer
 			formatter := OutputFormatter(&b, test.outFormat)
-			formatter.Write(resultList)
+			err = formatter.Write(resultList)
+			if err != nil {
+				t.Fatalf("error occurred attempting to write output: %v", err)
+			}
 			if test.outFormat == PlainTextOutput {
 				t.CheckDeepEqual(b.String(), test.expected)
 			} else {

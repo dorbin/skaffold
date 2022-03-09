@@ -19,6 +19,8 @@ enum BuilderType {
     KANIKO = 5;
     // Docker Builder
     DOCKER = 6;
+    // Ko Builder
+    KO = 7;
 }
 
 // Enum indicating build type i.e. local, cluster vs GCB
@@ -222,6 +224,10 @@ enum StatusCode {
     // GCB error to get cloud build client to perform GCB operations.
     BUILD_GET_CLOUD_BUILD_CLIENT_ERR = 145;
 
+    // Build platform errors
+
+    // Value provided to --platform flag cannot be parsed
+    BUILD_UNKNOWN_PLATFORM_FLAG = 150;
 
     // Container errors
 
@@ -273,11 +279,25 @@ enum StatusCode {
     STATUSCHECK_KUBECTL_CLIENT_FETCH_ERR = 411;
     STATUSCHECK_DEPLOYMENT_FETCH_ERR = 412;
     STATUSCHECK_STANDALONE_PODS_FETCH_ERR = 413;
+    STATUSCHECK_CONFIG_CONNECTOR_RESOURCES_FETCH_ERR = 414;
+    STATUSCHECK_STATEFULSET_FETCH_ERR = 415;
 
     // Pod States
 
     // Pod Initializing
     STATUSCHECK_POD_INITIALIZING = 451;
+
+    // Config Connector resource states
+    // Maps to https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus#statuses
+
+    // The actual state of the resource has not yet reached the desired state
+    STATUSCHECK_CONFIG_CONNECTOR_IN_PROGRESS = 452;
+    // The process of reconciling the actual state with the desired state has encountered an error
+    STATUSCHECK_CONFIG_CONNECTOR_FAILED = 453;
+    // The resource is in the process of being deleted
+    STATUSCHECK_CONFIG_CONNECTOR_TERMINATING = 454;
+    // The resource does not exist
+    STATUSCHECK_CONFIG_CONNECTOR_NOT_FOUND = 455;
 
     // Unknown Error Codes
 
@@ -291,6 +311,8 @@ enum StatusCode {
     STATUSCHECK_CONTAINER_WAITING_UNKNOWN = 503;
     // Container event reason unknown
     STATUSCHECK_UNKNOWN_EVENT = 509;
+    // Status Check internal error
+    STATUSCHECK_INTERNAL_ERROR = 514;
 
     // Deploy failed due to unknown reason
     DEPLOY_UNKNOWN = 504;
@@ -549,6 +571,8 @@ enum SuggestionCode {
     // Set Cleanup flag for skaffold command.
     SET_CLEANUP_FLAG = 116;
 
+    // Build platform error suggestion codes
+    BUILD_FIX_UNKNOWN_PLATFORM_FLAG = 117;
 
 
     // Deploy error suggestion codes
@@ -660,7 +684,7 @@ enum SuggestionCode {
     INSPECT_USE_ADD_BUILD_ENV = 801;
     // Check profile flag value
     INSPECT_CHECK_INPUT_PROFILE = 802;
-    
+
     // Open an issue so this situation can be diagnosed
     OPEN_ISSUE = 900;
 

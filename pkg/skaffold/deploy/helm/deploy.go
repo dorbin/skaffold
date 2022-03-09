@@ -125,6 +125,7 @@ type Config interface {
 	kloader.Config
 	portforward.Config
 	IsMultiConfig() bool
+	JSONParseConfig() latestV1.JSONParseConfig
 }
 
 // NewDeployer returns a configured Deployer.  Returns an error if current version of helm is less than 3.0.0.
@@ -345,11 +346,12 @@ func (h *Deployer) Dependencies() ([]string, error) {
 }
 
 // Cleanup deletes what was deployed by calling Deploy.
-func (h *Deployer) Cleanup(ctx context.Context, out io.Writer) error {
+func (h *Deployer) Cleanup(ctx context.Context, out io.Writer, dryRun bool) error {
 	instrumentation.AddAttributesToCurrentSpanFromContext(ctx, map[string]string{
 		"DeployerType": "helm",
 	})
 
+	var errMsgs []string
 	for _, r := range h.Releases {
 		releaseName, err := util.ExpandEnvTemplateOrFail(r.Name, nil)
 		if err != nil {
@@ -360,14 +362,24 @@ func (h *Deployer) Cleanup(ctx context.Context, out io.Writer) error {
 		if err != nil {
 			return err
 		}
+		args := []string{}
+		if dryRun {
+			args = append(args, "get", "manifest")
+		} else {
+			args = append(args, "delete")
+		}
+		args = append(args, releaseName)
 
-		args := []string{"delete", releaseName}
 		if namespace != "" {
 			args = append(args, "--namespace", namespace)
 		}
 		if err := h.exec(ctx, out, false, nil, args...); err != nil {
-			return deployerr.CleanupErr(err)
+			errMsgs = append(errMsgs, err.Error())
 		}
+	}
+
+	if len(errMsgs) != 0 {
+		return deployerr.CleanupErr(fmt.Errorf(strings.Join(errMsgs, "\n")))
 	}
 	return nil
 }
@@ -573,7 +585,7 @@ func (h *Deployer) deployRelease(ctx context.Context, out io.Writer, releaseName
 		return nil, userErr("get release", err)
 	}
 
-	artifacts := parseReleaseInfo(opts.namespace, bufio.NewReader(&b))
+	artifacts := parseReleaseManifests(opts.namespace, bufio.NewReader(&b))
 	return artifacts, nil
 }
 

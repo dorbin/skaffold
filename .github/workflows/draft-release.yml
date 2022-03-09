@@ -1,4 +1,4 @@
-name: create draft release
+name: Create Draft Release
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
     - main
 
 permissions: read-all
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}-${{github.workflow}}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -44,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 

@@ -31,13 +31,19 @@ import (
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes"
 	kubernetesclient "github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/client"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/platform"
 	latestV1 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest/v1"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
 )
 
 const initContainer = "kaniko-init-container"
 
-func (b *Builder) buildWithKaniko(ctx context.Context, out io.Writer, workspace string, artifactName string, artifact *latestV1.KanikoArtifact, tag string, requiredImages map[string]*string) (string, error) {
+func (b *Builder) buildWithKaniko(ctx context.Context, out io.Writer, workspace string, artifactName string, artifact *latestV1.KanikoArtifact, tag string, requiredImages map[string]*string, platforms platform.Matcher) (string, error) {
+	// TODO: Implement building multi-platform images for cluster builder
+	if platforms.IsMultiPlatform() {
+		log.Entry(ctx).Warnf("multiple target platforms %q found for artifact %q. Skaffold doesn't yet support multi-platform builds for the docker builder. Consider specifying a single target platform explicitly. See https://skaffold.dev/docs/pipeline-stages/builders/#cross-platform-build-support", platforms.String(), artifactName)
+	}
+
 	generatedEnvs, err := generateEnvFromImage(tag)
 	if err != nil {
 		return "", fmt.Errorf("error processing generated env variables from image uri: %w", err)
@@ -60,7 +66,7 @@ func (b *Builder) buildWithKaniko(ctx context.Context, out io.Writer, workspace 
 	}
 	pods := client.CoreV1().Pods(b.Namespace)
 
-	podSpec, err := b.kanikoPodSpec(artifact, tag)
+	podSpec, err := b.kanikoPodSpec(artifact, tag, platforms)
 	if err != nil {
 		return "", err
 	}
@@ -102,12 +108,14 @@ func (b *Builder) copyKanikoBuildContext(ctx context.Context, workspace string, 
 		return fmt.Errorf("waiting for pod to initialize: %w", err)
 	}
 
+	errs := make(chan error, 1)
 	buildCtx, buildCtxWriter := io.Pipe()
 	go func() {
 		err := docker.CreateDockerTarContext(ctx, buildCtxWriter, docker.NewBuildConfig(
 			workspace, artifactName, artifact.DockerfilePath, artifact.BuildArgs), b.cfg)
 		if err != nil {
 			buildCtxWriter.CloseWithError(fmt.Errorf("creating docker context: %w", err))
+			errs <- err
 			return
 		}
 		buildCtxWriter.Close()
@@ -117,7 +125,12 @@ func (b *Builder) copyKanikoBuildContext(ctx context.Context, workspace string, 
 	// In case of an error, print the command's output. (The `err` itself is useless: exit status 1).
 	var out bytes.Buffer
 	if err := b.kubectlcli.Run(ctx, buildCtx, &out, "exec", "-i", podName, "-c", initContainer, "-n", b.Namespace, "--", "tar", "-xf", "-", "-C", kaniko.DefaultEmptyDirMountPath); err != nil {
-		return fmt.Errorf("uploading build context: %s", out.String())
+		errRun := fmt.Errorf("uploading build context: %s", out.String())
+		errTar := <-errs
+		if errTar != nil {
+			errRun = fmt.Errorf("%v\ntar errors: %w", errRun, errTar)
+		}
+		return errRun
 	}
 
 	// Generate a file to successfully terminate the init container.

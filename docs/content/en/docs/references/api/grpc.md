@@ -817,6 +817,7 @@ Enum indicating builders used
 | CUSTOM | 4 | Custom Builder |
 | KANIKO | 5 | Kaniko Builder |
 | DOCKER | 6 | Docker Builder |
+| KO | 7 | Ko Builder |
 
 
 
@@ -945,6 +946,7 @@ For Cancelled Error code, use range 800 to 850.<br>
 | BUILD_GCB_EXTRACT_PROJECT_ID | 143 | GCB error to extract Project ID. |
 | BUILD_GET_CLOUD_STORAGE_CLIENT_ERR | 144 | GCB error to get cloud storage client to perform GCS operation. |
 | BUILD_GET_CLOUD_BUILD_CLIENT_ERR | 145 | GCB error to get cloud build client to perform GCB operations. |
+| BUILD_UNKNOWN_PLATFORM_FLAG | 150 | Value provided to --platform flag cannot be parsed |
 | STATUSCHECK_IMAGE_PULL_ERR | 300 | Container image pull error |
 | STATUSCHECK_CONTAINER_CREATING | 301 | Container creating error |
 | STATUSCHECK_RUN_CONTAINER_ERR | 302 | Container run error |
@@ -967,12 +969,19 @@ For Cancelled Error code, use range 800 to 850.<br>
 | STATUSCHECK_KUBECTL_CLIENT_FETCH_ERR | 411 | Kubectl client fetch err |
 | STATUSCHECK_DEPLOYMENT_FETCH_ERR | 412 |  |
 | STATUSCHECK_STANDALONE_PODS_FETCH_ERR | 413 |  |
+| STATUSCHECK_CONFIG_CONNECTOR_RESOURCES_FETCH_ERR | 414 |  |
+| STATUSCHECK_STATEFULSET_FETCH_ERR | 415 |  |
 | STATUSCHECK_POD_INITIALIZING | 451 | Pod Initializing |
+| STATUSCHECK_CONFIG_CONNECTOR_IN_PROGRESS | 452 | The actual state of the resource has not yet reached the desired state |
+| STATUSCHECK_CONFIG_CONNECTOR_FAILED | 453 | The process of reconciling the actual state with the desired state has encountered an error |
+| STATUSCHECK_CONFIG_CONNECTOR_TERMINATING | 454 | The resource is in the process of being deleted |
+| STATUSCHECK_CONFIG_CONNECTOR_NOT_FOUND | 455 | The resource does not exist |
 | UNKNOWN_ERROR | 500 | Could not determine error and phase |
 | STATUSCHECK_UNKNOWN | 501 | Status Check error unknown |
 | STATUSCHECK_UNKNOWN_UNSCHEDULABLE | 502 | Container is unschedulable due to unknown reasons |
 | STATUSCHECK_CONTAINER_WAITING_UNKNOWN | 503 | Container is waiting due to unknown reason |
 | STATUSCHECK_UNKNOWN_EVENT | 509 | Container event reason unknown |
+| STATUSCHECK_INTERNAL_ERROR | 514 | Status Check internal error |
 | DEPLOY_UNKNOWN | 504 | Deploy failed due to unknown reason |
 | SYNC_UNKNOWN | 505 | SYNC failed due to known reason |
 | BUILD_UNKNOWN | 506 | Build failed due to unknown reason |
@@ -1093,6 +1102,7 @@ Enum for Suggestion codes
 | FIX_DOCKER_NETWORK_MODE_WHEN_EXTRACTING_CONTAINER_NAME | 114 | Executing extractContainerNameFromNetworkMode with a non valid mode (only container mode allowed) |
 | RUN_DOCKER_PRUNE | 115 | Prune Docker image |
 | SET_CLEANUP_FLAG | 116 | Set Cleanup flag for skaffold command. |
+| BUILD_FIX_UNKNOWN_PLATFORM_FLAG | 117 | Build platform error suggestion codes |
 | CHECK_CLUSTER_CONNECTION | 201 | Check cluster connection |
 | CHECK_MINIKUBE_STATUS | 202 | Check minikube status |
 | INSTALL_HELM | 203 | Install helm tool |
